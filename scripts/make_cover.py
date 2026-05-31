@@ -30,10 +30,11 @@ All output paths are printed on success. Errors print `ERROR: ...`.
 """
 import glob
 import hashlib
+import json
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
 # ---------- helpers ----------
@@ -122,9 +123,48 @@ def cmd_gen(args):
     icons = []
     if icons_spec:
         if os.path.isdir(icons_spec):
-            icons = sorted(glob.glob(os.path.join(icons_spec, "*.png")))
+            # default: all pngs in the folder
+            found = sorted(glob.glob(os.path.join(icons_spec, "*.png")))
         else:
-            icons = sorted(glob.glob(icons_spec))
+            found = sorted(glob.glob(icons_spec))
+        # Ignore preview/spritesheet files (named like *_prev.png)
+        found = [p for p in found if not os.path.basename(p).endswith("_prev.png")]
+
+        # If there's a plan.json in the icons folder, and an audio manifest for
+        # the same album, prefer ordering icons to match the track list.
+        plan_path = os.path.join(icons_spec, "plan.json") if os.path.isdir(icons_spec) else None
+        album_name = os.path.basename(os.path.normpath(icons_spec))
+        manifest_path = os.path.join("audio", album_name, "manifest.json")
+        icons_ordered = []
+        try:
+            if plan_path and os.path.exists(plan_path) and os.path.exists(manifest_path):
+                with open(plan_path, "r", encoding="utf-8") as f:
+                    plan = json.load(f)
+                icons_map = plan.get("icons", {})
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                tracks = manifest.get("tracks", [])
+                for i, _ in enumerate(tracks, start=1):
+                    key = str(i)
+                    if key in icons_map:
+                        p = icons_map[key]
+                        # make path absolute/relative-consistent
+                        if not os.path.exists(p):
+                            alt = os.path.join(icons_spec, os.path.basename(p))
+                            if os.path.exists(alt):
+                                p = alt
+                        if os.path.exists(p) and not os.path.basename(p).endswith("_prev.png"):
+                            icons_ordered.append(p)
+                # Fallback: if we didn't collect any, use found list
+                if icons_ordered:
+                    icons = icons_ordered
+                else:
+                    icons = found
+            else:
+                icons = found
+        except Exception:
+            icons = found
+
     icons = icons[:9]
     if icons:
         n = len(icons)
@@ -143,8 +183,15 @@ def cmd_gen(args):
         for i, p in enumerate(icons):
             r, c = divmod(i, cols)
             try:
-                ic = Image.open(p).convert("RGBA").resize((cell, cell),
-                                                          Image.NEAREST)
+                ic = Image.open(p).convert("RGBA")
+                # Crop/resize to the cell using a high-quality filter. Using
+                # ImageOps.fit avoids downscaling an entire spritesheet into
+                # a mini-grid by focusing on the central region.
+                try:
+                    ic = ImageOps.fit(ic, (cell, cell), method=Image.LANCZOS,
+                                      centering=(0.5, 0.5))
+                except Exception:
+                    ic = ic.resize((cell, cell), Image.LANCZOS)
             except Exception:
                 continue
             tile = Image.new("RGBA", (cell, cell), lighten(bg, 0.85) + (255,))
