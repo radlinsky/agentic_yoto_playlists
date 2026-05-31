@@ -1,0 +1,27 @@
+# Yoto Token (DO NOT COMMIT)
+.yoto_token.txt
+
+# Generated media folders (DO NOT COMMIT USER PLAYLIST DATA)
+/audio/*
+/icons/*
+/album_artwork/*
+
+# Except keep the directories themselves if they exist (optional, but standard way is to add a .gitkeep if we wanted empty dirs)
+# We will just ignore the contents of these directories or the directories entirely:
+/audio/
+/icons/
+/album_artwork/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# agent specific files
+.*
+!.gitignore
+.DS_Store
+Thumbs.db
+
+# agent specific files
+
