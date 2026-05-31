@@ -25,4 +25,4 @@ The core philosophy of this project is that an AI Agent is perfectly suited to m
 The agent will read the instructions, figure out which reference guides to follow, and use the included Python scripts to get the job done!
 
 ## License
-Open Source (MIT or similar).
+Open Source (MIT).
