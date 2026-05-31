@@ -45,6 +45,25 @@ Subcommands
         }
       Skips any track that already has an icon unless --force is given.
 
+  upload-audio <file>
+      Upload and transcode one audio file. Prints sha, duration, fileSize,
+      channels, and format. Resumable: the same file returns the same sha.
+
+  set-cover <cardId> <image>
+      Upload an image and set it as the card's playlist cover
+      (metadata.cover.imageL). Prints `set-cover ok=True url=...`.
+
+  dedupe <cardId>
+      Drop duplicate tracks (same trackUrl) and duplicate chapters, collapsing
+      an accidentally multiplied card to its unique tracks.
+
+  create --manifest <m.json> [--title T] [--desc-file d.txt]
+      Upload audio from a manifest, create a NEW card. Resumable via a
+      .uploads.json cache. Prints `created cardId=<id> tracks=N`.
+
+  delete <cardId>
+      Delete a card permanently.
+
 Exit code 0 on success, non-zero on error. All errors print `ERROR: ...`.
 """
 import json
@@ -63,13 +82,27 @@ DEFAULT_ICON = "yoto:#aUm9i3ex3qqAMYBv-i-O-pYMKuMJGICtR3Vhf289u2Q"
 
 
 def has_real_icon(track):
+    """Check whether a track has a custom (non-placeholder) icon.
+
+    Args:
+        track: A track dict from the card's content.chapters[].tracks[].
+
+    Returns:
+        True if the track has an icon16x16 that is not the default placeholder.
+    """
     ic = (track.get("display") or {}).get("icon16x16")
     return bool(ic) and ic != DEFAULT_ICON
 
 
 def set_track_icon(chapter, track, mid):
     """Assign an icon ref to a track (and its chapter), coercing display:null
-    -> {} — newly created cards have display=None, not a missing key."""
+    -> {} — newly created cards have display=None, not a missing key.
+
+    Args:
+        chapter: The chapter dict containing this track.
+        track:   The track dict to update.
+        mid:     The icon reference string (e.g. 'yoto:#<mediaId>').
+    """
     if not isinstance(track.get("display"), dict):
         track["display"] = {}
     track["display"]["icon16x16"] = mid
@@ -80,6 +113,17 @@ def set_track_icon(chapter, track, mid):
 
 # ---------- token & http ----------
 def find_token():
+    """Locate and return the Yoto API bearer token.
+
+    Search order: $YOTO_TOKEN env var, $YOTO_TOKEN_FILE path,
+    .yoto_token.txt in cwd, ~/.yoto_token.
+
+    Returns:
+        The token string, stripped of whitespace.
+
+    Raises:
+        SystemExit: If no token is found in any location.
+    """
     t = os.environ.get("YOTO_TOKEN")
     if t:
         return t.strip()
@@ -97,6 +141,20 @@ def find_token():
 
 
 def req(method, path, token, body=None, headers=None, raw=False):
+    """Make an authenticated HTTP request to the Yoto API.
+
+    Args:
+        method:  HTTP method string ('GET', 'POST', 'PUT', 'DELETE').
+        path:    API path (e.g. '/content/<id>') or a full URL.
+        token:   Bearer token string.
+        body:    Request body. JSON-serialised automatically unless raw=True.
+        headers: Optional dict of extra HTTP headers to merge in.
+        raw:     If True, send body as raw bytes (no JSON encoding).
+
+    Returns:
+        A (status_code, response_text) tuple. status_code is 0 on
+        connection-level exceptions.
+    """
     url = path if path.startswith("http") else API + path
     data = None
     h = {"authorization": "Bearer " + token, "accept": "application/json"}
@@ -119,6 +177,18 @@ def req(method, path, token, body=None, headers=None, raw=False):
 
 
 def get_card(cardId, token):
+    """Fetch a card's full JSON from the API.
+
+    Args:
+        cardId: The 5-character card identifier (e.g. 'dWAMo').
+        token:  Bearer token string.
+
+    Returns:
+        The card dict (unwrapped from the {card: ...} envelope).
+
+    Raises:
+        SystemExit: On any non-200 response.
+    """
     st, txt = req("GET", "/content/" + cardId, token)
     if st != 200:
         raise SystemExit("ERROR: GET card %s -> HTTP %s: %s" % (cardId, st, txt[:200]))
@@ -127,7 +197,14 @@ def get_card(cardId, token):
 
 
 def iter_tracks(card):
-    """Yield (chapterIdx, trackIdx_global, chapter, track)."""
+    """Yield (chapterIdx, trackIdx_global, chapter, track) for every track.
+
+    Args:
+        card: A card dict as returned by get_card().
+
+    Yields:
+        Tuples of (chapterIdx, globalTrackIdx_1based, chapter_dict, track_dict).
+    """
     g = 0
     for ci, ch in enumerate(card.get("content", {}).get("chapters", [])):
         for tr in ch.get("tracks", []):
@@ -136,7 +213,18 @@ def iter_tracks(card):
 
 
 def save_card(card, token):
-    """POST the (modified) card back. Yoto expects the content envelope."""
+    """POST the (modified) card back. Yoto expects the content envelope.
+
+    Args:
+        card:  The card dict (must contain cardId/id, title, content, metadata).
+        token: Bearer token string.
+
+    Returns:
+        The parsed JSON response dict (may be empty for non-JSON responses).
+
+    Raises:
+        SystemExit: On any non-200/201 response.
+    """
     payload = {
         "cardId": card.get("cardId") or card.get("id"),
         "title": card.get("title"),
@@ -151,8 +239,20 @@ def save_card(card, token):
 
 # ---------- audio upload + card creation ----------
 def upload_audio(path, token, poll_max=120, poll_interval=2.0):
-    """Upload one audio file and wait for transcoding. Returns a dict with the
-    fields a track needs: {sha, duration, fileSize, channels, format}.
+    """Upload one audio file and wait for transcoding.
+
+    Args:
+        path:          Local filesystem path to the audio file.
+        token:         Bearer token string.
+        poll_max:      Maximum number of transcode-status polls (default 120).
+        poll_interval: Seconds between polls (default 2.0).
+
+    Returns:
+        A dict with the fields a track needs:
+        {sha, duration, fileSize, channels, format}.
+
+    Raises:
+        SystemExit: On upload failure or transcode timeout.
 
     Flow (verified against the live API):
       1. GET /media/transcode/audio/uploadUrl?sha256=<sha>&filename=<fn>
@@ -203,7 +303,18 @@ def upload_audio(path, token, poll_max=120, poll_interval=2.0):
 
 
 def make_track(key, title, up, overlay=None):
-    """Build a track object from an upload_audio() result."""
+    """Build a track object from an upload_audio() result.
+
+    Args:
+        key:     Chapter/track key string (e.g. '01').
+        title:   Display title for the track.
+        up:      Dict returned by upload_audio() with sha, format, duration, etc.
+        overlay: Optional overlay label string (e.g. track number shown on the
+                 Yoto player display).
+
+    Returns:
+        A track dict ready to embed in a chapter's tracks list.
+    """
     t = {
         "key": key, "title": title,
         "trackUrl": yoto_ref(up["sha"]),
@@ -217,7 +328,20 @@ def make_track(key, title, up, overlay=None):
 
 
 def create_card(title, tracks, token, description=None):
-    """Create a NEW card; one chapter per track. Returns the new cardId."""
+    """Create a NEW card; one chapter per track.
+
+    Args:
+        title:       Playlist title string.
+        tracks:      List of track dicts (as built by make_track()).
+        token:       Bearer token string.
+        description: Optional card description (<=500 chars).
+
+    Returns:
+        The new cardId string (e.g. 'dWAMo').
+
+    Raises:
+        SystemExit: On any non-200/201 response.
+    """
     chapters = []
     for i, tr in enumerate(tracks, 1):
         k = "%02d" % i
@@ -234,6 +358,12 @@ def create_card(title, tracks, token, description=None):
 
 # ---------- subcommands ----------
 def cmd_whoami(args, token):
+    """Subcommand: verify the token works; print scopes + expiry + live check.
+
+    Args:
+        args:  Remaining CLI args after the subcommand name (unused).
+        token: Bearer token string.
+    """
     import base64
     try:
         payload = token.split(".")[1]
@@ -253,6 +383,12 @@ def cmd_whoami(args, token):
 
 
 def cmd_get(args, token):
+    """Subcommand: print a card's title, description length, and track listing.
+
+    Args:
+        args:  [cardId].
+        token: Bearer token string.
+    """
     card = get_card(args[0], token)
     desc = (card.get("metadata", {}) or {}).get("description", "") or ""
     print("title=%s descLen=%d" % (card.get("title"), len(desc)))
@@ -264,6 +400,12 @@ def cmd_get(args, token):
 
 
 def cmd_dump(args, token):
+    """Subcommand: save the full raw card JSON to a file.
+
+    Args:
+        args:  [cardId, outfile.json].
+        token: Bearer token string.
+    """
     card = get_card(args[0], token)
     with open(args[1], "w", encoding="utf-8") as f:
         json.dump(card, f, ensure_ascii=False, indent=2)
@@ -272,6 +414,12 @@ def cmd_dump(args, token):
 
 
 def cmd_set_desc(args, token):
+    """Subcommand: replace a card's description from a text file.
+
+    Args:
+        args:  [cardId, '--file', desc.txt].
+        token: Bearer token string.
+    """
     cardId = args[0]
     fpath = args[args.index("--file") + 1]
     with open(fpath, "r", encoding="utf-8") as f:
@@ -291,7 +439,18 @@ def cmd_set_desc(args, token):
 
 def upload_icon(path, token):
     """Upload a 16x16 PNG. The endpoint wants the RAW image bytes as the body
-    with an image content-type (NOT multipart/form-data)."""
+    with an image content-type (NOT multipart/form-data).
+
+    Args:
+        path:  Local filesystem path to the PNG file.
+        token: Bearer token string.
+
+    Returns:
+        The mediaId string for the uploaded icon.
+
+    Raises:
+        SystemExit: On upload failure or if no mediaId is returned.
+    """
     with open(path, "rb") as f:
         data = f.read()
     fn = os.path.basename(path)
@@ -312,6 +471,12 @@ def upload_icon(path, token):
 
 
 def cmd_upload_icon(args, token):
+    """Subcommand: upload a 16x16 PNG and print its mediaId.
+
+    Args:
+        args:  [file.png].
+        token: Bearer token string.
+    """
     mid = upload_icon(args[0], token)
     print("mediaId=%s" % mid)
     return 0
@@ -319,7 +484,18 @@ def cmd_upload_icon(args, token):
 
 def upload_cover(path, token):
     """Upload a square cover image; return its public mediaUrl.
-    Endpoint wants RAW image bytes with an image content-type (not multipart)."""
+    Endpoint wants RAW image bytes with an image content-type (not multipart).
+
+    Args:
+        path:  Local filesystem path to the cover image.
+        token: Bearer token string.
+
+    Returns:
+        The public mediaUrl string for the uploaded cover.
+
+    Raises:
+        SystemExit: On upload failure or if no mediaUrl is returned.
+    """
     with open(path, "rb") as f:
         data = f.read()
     fn = os.path.basename(path)
@@ -338,8 +514,14 @@ def upload_cover(path, token):
 
 
 def cmd_set_cover(args, token):
-    """set-cover <cardId> <image> -- upload an image and set it as the card's
-    playlist cover (metadata.cover.imageL)."""
+    """Subcommand: upload an image and set it as the card's playlist cover.
+
+    Sets metadata.cover.imageL on the card.
+
+    Args:
+        args:  [cardId, image_path].
+        token: Bearer token string.
+    """
     cardId, path = args[0], args[1]
     url = upload_cover(path, token)
     card = get_card(cardId, token)
@@ -352,7 +534,14 @@ def cmd_set_cover(args, token):
 
 
 def yoto_ref(mid):
-    """Normalise a raw mediaId into the required 'yoto:#<mediaId>' form."""
+    """Normalise a raw mediaId into the required 'yoto:#<mediaId>' form.
+
+    Args:
+        mid: A mediaId string, with or without 'yoto:' prefix and '#'.
+
+    Returns:
+        The normalised string 'yoto:#<mediaId>'.
+    """
     mid = mid.strip()
     if mid.startswith("yoto:"):
         mid = mid[len("yoto:"):]
@@ -362,6 +551,12 @@ def yoto_ref(mid):
 
 
 def cmd_set_icon(args, token):
+    """Subcommand: set one track's 16x16 icon by index.
+
+    Args:
+        args:  [cardId, trackIndex (1-based), mediaId].
+        token: Bearer token string.
+    """
     cardId, idx, mid = args[0], int(args[1]), yoto_ref(args[2])
     card = get_card(cardId, token)
     done = False
@@ -379,6 +574,12 @@ def cmd_set_icon(args, token):
 
 
 def cmd_apply(args, token):
+    """Subcommand: apply a plan (description + icons) to a card in one shot.
+
+    Args:
+        args:  [cardId, '--plan', plan.json, optional '--force'].
+        token: Bearer token string.
+    """
     cardId = args[0]
     plan = json.load(open(args[args.index("--plan") + 1], "r", encoding="utf-8"))
     force = "--force" in args

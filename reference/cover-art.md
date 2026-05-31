@@ -6,7 +6,7 @@ Two outputs from one image:
 
 Covers are generated deterministically with Pillow (no model, no network needed)
 — the reliable choice for a small local model. Run from your active workspace.
-SCRIPTS = the skill's `scripts/` dir. Token verified (SKILL Step 0).
+SCRIPTS = the skill's `scripts/` dir. Token verified (AGENT_INSTRUCTIONS Step 0).
 
 ## 1. Generate the cover image
 Reuse the playlist's own track icons as the cover motif (recognisable + free):

@@ -34,6 +34,7 @@ import sys
 
 
 def ensure_ytdlp():
+    """Ensure yt-dlp is importable, installing via pip if needed."""
     try:
         subprocess.run([sys.executable, "-m", "yt_dlp", "--version"],
                        capture_output=True, check=True)
@@ -48,12 +49,28 @@ PLAYER_CLIENTS = ["android", "ios", "tv", "web_safari"]
 
 
 def ytdlp(args):
+    """Run yt-dlp as a subprocess with the given arguments.
+
+    Args:
+        args: List of CLI arguments to pass to yt-dlp.
+
+    Returns:
+        A subprocess.CompletedProcess instance.
+    """
     return subprocess.run([sys.executable, "-m", "yt_dlp"] + args,
                           capture_output=True, text=True, encoding="utf-8")
 
 
 def ytdlp_dl(base_args, url):
-    """Run a download trying each player client until one succeeds."""
+    """Run a download trying each player client until one succeeds.
+
+    Args:
+        base_args: Base yt-dlp arguments (format/output options).
+        url:       The YouTube URL to download.
+
+    Returns:
+        The CompletedProcess from the last (or successful) attempt.
+    """
     last = None
     for pc in PLAYER_CLIENTS:
         r = ytdlp(base_args + ["--extractor-args",
@@ -65,6 +82,14 @@ def ytdlp_dl(base_args, url):
 
 
 def clean_title(t):
+    """Strip emojis, tidy whitespace, and truncate a track title.
+
+    Args:
+        t: Raw title string from YouTube.
+
+    Returns:
+        Cleaned title, max 120 characters.
+    """
     # drop common emoji and tidy whitespace; keep letters/accents/punctuation
     t = re.sub(r"[\U0001F000-\U0001FAFF☀-➿️]", "", t)
     t = re.sub(r"\s+", " ", t).strip(" -–—\t")
@@ -72,6 +97,14 @@ def clean_title(t):
 
 
 def parse_indices(spec):
+    """Parse a comma-separated index spec like '1,3,5-9' into a set of ints.
+
+    Args:
+        spec: Index specification string (1-based, ranges with '-').
+
+    Returns:
+        A set of integer indices.
+    """
     out = set()
     for part in spec.split(","):
         part = part.strip()
@@ -84,6 +117,14 @@ def parse_indices(spec):
 
 
 def cmd_list(url):
+    """Subcommand: list playlist items as index|duration_s|title lines.
+
+    Args:
+        url: YouTube video or playlist URL.
+
+    Returns:
+        yt-dlp's exit code.
+    """
     ensure_ytdlp()
     r = ytdlp(["--flat-playlist", "--print",
                "%(playlist_index)s|%(duration)s|%(title)s", url])
@@ -94,6 +135,17 @@ def cmd_list(url):
 
 
 def cmd_fetch(url, outdir, indices=None, max_min=60):
+    """Subcommand: download selected items as mp3 and write a manifest.
+
+    Args:
+        url:     YouTube video or playlist URL.
+        outdir:  Directory to save mp3 files and manifest.json.
+        indices: Optional index spec string (e.g. '1-5,9') to select items.
+        max_min: Skip items longer than this many minutes (default 60).
+
+    Returns:
+        Exit code (always 0).
+    """
     ensure_ytdlp()
     os.makedirs(outdir, exist_ok=True)
     # enumerate items
@@ -154,6 +206,11 @@ def cmd_fetch(url, outdir, indices=None, max_min=60):
 
 
 def main():
+    """CLI entry point. Parse subcommand (list/fetch) from argv.
+
+    Returns:
+        Exit code (0 success, 2 usage).
+    """
     a = sys.argv[1:]
     if not a:
         print(__doc__); return 2

@@ -26,11 +26,25 @@ AUDIO_EXT = (".m4a", ".aac", ".flac", ".wav", ".ogg", ".opus", ".mp3", ".wma")
 
 
 def run(cmd: list) -> int:
+    """Run a command, printing it to stderr. Return the exit code.
+
+    Args:
+        cmd: Command and arguments as a list of strings.
+    """
     print("+ " + " ".join(cmd), file=sys.stderr)
     return subprocess.run(cmd).returncode
 
 
 def ensure(pip_pkg: str, probe: list) -> bool:
+    """Ensure a CLI tool is available, installing its pip package if needed.
+
+    Args:
+        pip_pkg: The pip package name to install (e.g. 'internetarchive').
+        probe:   Command to run to check availability (e.g. ['ia', '--version']).
+
+    Returns:
+        True if the tool is available (or was installed), False on failure.
+    """
     try:
         subprocess.run(probe, capture_output=True, check=True)
         return True
@@ -41,6 +55,11 @@ def ensure(pip_pkg: str, probe: list) -> bool:
 
 
 def convert_dir(outdir: str) -> None:
+    """Convert all non-mp3 audio files in a directory to 128 kbps mp3.
+
+    Args:
+        outdir: Path to the directory containing audio files.
+    """
     for fn in sorted(os.listdir(outdir)):
         path = os.path.join(outdir, fn)
         ext = os.path.splitext(fn)[1].lower()
@@ -53,6 +72,11 @@ def convert_dir(outdir: str) -> None:
 
 
 def main() -> int:
+    """CLI entry point. Parse mode from argv and dispatch.
+
+    Returns:
+        Exit code (0 success, 1 error, 2 usage).
+    """
     a = sys.argv[1:]
     if not a:
         print(__doc__)

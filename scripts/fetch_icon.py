@@ -25,13 +25,28 @@ BASE = "https://yotoicons.com"
 
 
 def http_get(url: str) -> bytes:
+    """Fetch a URL and return the raw response bytes.
+
+    Args:
+        url: The URL to fetch.
+
+    Returns:
+        The response body as bytes.
+    """
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as r:
         return r.read()
 
 
 def find_icon_ids(tag: str) -> list:
-    """Return ordered, de-duplicated icon IDs from the search results page."""
+    """Return ordered, de-duplicated icon IDs from the search results page.
+
+    Args:
+        tag: English keyword to search for (e.g. 'owl', 'guitar').
+
+    Returns:
+        List of icon ID strings in popularity order.
+    """
     url = "%s/icons?tag=%s&sort=popular" % (BASE, urllib.parse.quote(tag))
     try:
         html = http_get(url).decode("utf-8", "replace")
@@ -51,6 +66,11 @@ def find_icon_ids(tag: str) -> list:
 
 
 def normalize_16(path: str) -> None:
+    """Resize an image to 16x16 PNG in-place using Pillow (if available).
+
+    Args:
+        path: Filesystem path to the PNG to normalise.
+    """
     try:
         from PIL import Image
     except Exception:
@@ -65,6 +85,11 @@ def normalize_16(path: str) -> None:
 
 
 def main() -> int:
+    """CLI entry point. Parse TAG, OUTDIR, and --n from argv and dispatch.
+
+    Returns:
+        Exit code (0 success, 2 usage).
+    """
     import urllib.parse  # noqa: F401 (used via urllib.parse below)
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     n = 3

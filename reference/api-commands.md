@@ -17,6 +17,7 @@ Token comes from `$YOTO_TOKEN` or `.yoto_token.txt`; never printed.
 | `create --manifest <json> [--title T] [--desc-file d.txt]` | NEW card from a manifest of audio | `created cardId=<id> tracks=N` |
 | `delete <cardId>` | delete a card | `delete <id> -> HTTP 200` |
 | `set-cover <cardId> <image>` | upload an image + set it as the playlist cover | `set-cover ok=True url=...` |
+| `dedupe <cardId>` | drop duplicate tracks/chapters (same trackUrl) | `dedupe <id> -> tracks=N` |
 
 Cover art generation/printing is a separate script, `make_cover.py`:
 `gen --title T [--subtitle S] [--icons DIR] [--color #RRGGBB] --out cover.png`,

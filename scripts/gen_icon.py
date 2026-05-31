@@ -19,7 +19,14 @@ import sys
 
 
 def color_for(keyword: str) -> tuple:
-    """Deterministic, reasonably bright, non-black RGB from a keyword."""
+    """Deterministic, reasonably bright, non-black RGB from a keyword.
+
+    Args:
+        keyword: The text string to derive a colour from.
+
+    Returns:
+        An (r, g, b) tuple with each channel in [80, 255].
+    """
     h = hashlib.sha256(keyword.encode("utf-8")).digest()
     r, g, b = h[0], h[1], h[2]
     # Lift each channel so the result is never near-black / invisible.
@@ -30,6 +37,16 @@ def color_for(keyword: str) -> tuple:
 
 
 def gen_pillow(keyword: str, outpath: str, shape: str) -> bool:
+    """Generate a 16x16 icon using Pillow.
+
+    Args:
+        keyword: Text to derive colour and letter from.
+        outpath: Filesystem path to write the output PNG.
+        shape:   'circle', 'square', or 'letter'.
+
+    Returns:
+        True if Pillow was available and the icon was written.
+    """
     try:
         from PIL import Image, ImageDraw, ImageFont
     except Exception:
@@ -65,6 +82,16 @@ def gen_pillow(keyword: str, outpath: str, shape: str) -> bool:
 
 
 def gen_magick(keyword: str, outpath: str, shape: str) -> bool:
+    """Generate a 16x16 icon using ImageMagick's 'magick' CLI.
+
+    Args:
+        keyword: Text to derive colour and letter from.
+        outpath: Filesystem path to write the output PNG.
+        shape:   'circle', 'square', or 'letter'.
+
+    Returns:
+        True if ImageMagick was available and the icon was written.
+    """
     rgb = color_for(keyword)
     hexcol = "#%02x%02x%02x" % rgb
     if shape == "circle":
@@ -89,6 +116,11 @@ def gen_magick(keyword: str, outpath: str, shape: str) -> bool:
 
 
 def main() -> int:
+    """CLI entry point. Parse KEYWORD, OUTPATH, and --shape from argv.
+
+    Returns:
+        Exit code (0 success, 1 no backend, 2 usage).
+    """
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     shape = "letter"
     for a in sys.argv[1:]:

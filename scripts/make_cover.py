@@ -38,6 +38,14 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ---------- helpers ----------
 def color_for(title):
+    """Derive a pleasant, not-too-dark, not-too-light RGB tuple from a title.
+
+    Args:
+        title: The playlist title string.
+
+    Returns:
+        An (r, g, b) tuple with each channel in [50, 189].
+    """
     h = hashlib.sha256(title.encode("utf-8")).digest()
     # pleasant, not-too-dark, not-too-light
     r = 50 + h[0] % 140
@@ -47,6 +55,15 @@ def color_for(title):
 
 
 def load_font(size, bold=True):
+    """Load a TrueType font at the given size, falling back to default.
+
+    Args:
+        size: Font size in pixels.
+        bold: If True, prefer bold variants.
+
+    Returns:
+        A PIL ImageFont instance.
+    """
     names = (["arialbd.ttf", "Arialbd.ttf", "DejaVuSans-Bold.ttf"] if bold
              else ["arial.ttf", "DejaVuSans.ttf"])
     for n in names:
@@ -58,11 +75,32 @@ def load_font(size, bold=True):
 
 
 def text_size(d, s, font):
+    """Measure the pixel width and height of a text string.
+
+    Args:
+        d:    A PIL ImageDraw instance.
+        s:    The text string to measure.
+        font: A PIL ImageFont instance.
+
+    Returns:
+        A (width, height) tuple in pixels.
+    """
     b = d.textbbox((0, 0), s, font=font)
     return b[2] - b[0], b[3] - b[1]
 
 
 def wrap(d, text, font, maxw):
+    """Word-wrap text to fit within a maximum pixel width.
+
+    Args:
+        d:    A PIL ImageDraw instance.
+        text: The text string to wrap.
+        font: A PIL ImageFont instance.
+        maxw: Maximum width in pixels.
+
+    Returns:
+        A list of line strings.
+    """
     words = text.split()
     lines, cur = [], ""
     for w in words:
@@ -78,15 +116,43 @@ def wrap(d, text, font, maxw):
 
 
 def lighten(c, f=0.5):
+    """Lighten an RGB colour toward white.
+
+    Args:
+        c: An (r, g, b) tuple.
+        f: Blend factor (0.0 = unchanged, 1.0 = white).
+
+    Returns:
+        A lightened (r, g, b) tuple.
+    """
     return tuple(int(x + (255 - x) * f) for x in c)
 
 
 def darken(c, f=0.4):
+    """Darken an RGB colour toward black.
+
+    Args:
+        c: An (r, g, b) tuple.
+        f: Blend factor (0.0 = unchanged, 1.0 = black).
+
+    Returns:
+        A darkened (r, g, b) tuple.
+    """
     return tuple(int(x * (1 - f)) for x in c)
 
 
 # ---------- gen ----------
 def cmd_gen(args):
+    """Subcommand: generate a square cover PNG with title, optional subtitle,
+    and optional grid of track icons as a motif.
+
+    Args:
+        args: CLI args after the subcommand: --title, --out, [--subtitle],
+              [--icons DIR_or_glob], [--size N], [--color '#RRGGBB'].
+
+    Returns:
+        Exit code (0 success, 1 missing required args).
+    """
     def opt(name, default=None):
         return args[args.index(name) + 1] if name in args else default
     title = opt("--title")
@@ -193,6 +259,14 @@ def cmd_gen(args):
 
 # ---------- print ----------
 def cmd_print(args):
+    """Subcommand: place one cover on a US-Letter page as a print-ready PDF.
+
+    Args:
+        args: CLI args after the subcommand: --image, --out, [--mm N].
+
+    Returns:
+        Exit code (0 success, 1 missing required args).
+    """
     def opt(name, default=None):
         return args[args.index(name) + 1] if name in args else default
     image = opt("--image")
@@ -230,6 +304,15 @@ def cmd_print(args):
 
 # ---------- sheet (many covers -> one multi-page PDF) ----------
 def cmd_sheet(args):
+    """Subcommand: tile many covers onto a multi-page US-Letter PDF.
+
+    Args:
+        args: CLI args after the subcommand: --images DIR_or_glob, --out,
+              [--mm N].
+
+    Returns:
+        Exit code (0 success, 1 missing required args or no images found).
+    """
     def opt(name, default=None):
         return args[args.index(name) + 1] if name in args else default
     spec = opt("--images")   # dir or glob of cover PNGs
@@ -292,6 +375,11 @@ def cmd_sheet(args):
 
 
 def main():
+    """CLI entry point. Parse subcommand (gen/print/sheet) from argv.
+
+    Returns:
+        Exit code (0 success, 2 usage).
+    """
     if len(sys.argv) < 2:
         print(__doc__)
         return 2
