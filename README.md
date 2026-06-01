@@ -28,14 +28,6 @@ The agent then automatically takes care of the rest.
 
 The agent will read the instructions, figure out which reference guides to follow, and use the included Python scripts to get the job done!
 
-## Example Run
-
-Prompted the agent with: 
-
-> *"Read AGENT_INSTRUCTIONS.md and create a yoto card playlist from https://archive.org/metadata/aesop_fables_volume_one_librivox/files"*
-
-See this [hosted execution log](https://htmlpreview.github.io/?https://github.com/radlinsky/agentic_yoto_playlists/blob/main/example.html&leafId=eab39ea5&targetId=e4cc691e) to see how a locally hosted model running via `pi.dev` reasons through the request.
-
 ### What the Agent Does Automatically
 1. **Downloads audio**: Pulls down all songs/chapters into an `/audio` subfolder (e.g., takes ~10-15 minutes for a full album).
 2. **Uploads audio files to Yoto**: Pushes all audio tracks to your Yoto library via the Yoto API.
@@ -44,6 +36,18 @@ See this [hosted execution log](https://htmlpreview.github.io/?https://github.co
 5. **Uploads image files to Yoto**: Uploads the icons and the new album artwork to the playlist.
 6. **Writes card description**: Automatically generates a description for the album.
 7. **Generates printables**: Creates a ready-to-print PDF of the album cover to cut and tape onto a physical Yoto card.
+
+## Example Run
+
+Prompted the agent with: 
+
+> *"Read AGENT_INSTRUCTIONS.md and create a yoto card playlist from https://archive.org/metadata/aesop_fables_volume_one_librivox/files"*
+
+See this [hosted execution log](https://htmlpreview.github.io/?https://github.com/radlinsky/agentic_yoto_playlists/blob/main/example.html&leafId=eab39ea5&targetId=e4cc691e) to see how a locally hosted model running via `pi.dev` reasons through the request.
+
+<img width="1377" height="1228" alt="image" src="https://github.com/user-attachments/assets/7ba907b9-5347-4936-a9e7-60b9cafe4b3a" />
+
+<img width="547" height="407" alt="image" src="https://github.com/user-attachments/assets/dfd20990-4320-46f6-af03-3383ccfe8da1" />
 
 ## License
 This project is open-source software licensed under the [MIT License](LICENSE).
